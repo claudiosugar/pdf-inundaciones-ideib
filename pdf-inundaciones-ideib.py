@@ -252,7 +252,7 @@ def get_pdf_by_url(referencia_catastral):
 
 if __name__ == '__main__':
     # Test the PDF generation with a sample cadastral reference
-    sample_referencia_catastral = '7805508DD6870F'  # Replace with an actual reference
+    sample_referencia_catastral = '07040A04900017'  # Replace with an actual reference
     pdf_path = get_flood_area_pdf(sample_referencia_catastral)
     if pdf_path:
         print(f"PDF generated successfully: {pdf_path}")
