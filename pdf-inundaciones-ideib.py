@@ -111,12 +111,24 @@ def add_layer_risc_inundacio(page):
     try:
         logger.info("Clicking the 'Afegir' button for Risc Inundació...")
         # Locate the button based on the text in the info div and the title of the layer
-        add_button = page.locator('div.item-card-inner:has(h3.title[title="Xarxa Hidrogràfica i Risc Inundació"]):has(div.info:has-text("Servei de: GOIB: Direcció General de Recursos Hídrics")) a[data-dojo-attach-point="addButton"]')
-        add_button.wait_for(state="visible", timeout=5000)  # Wait for the button to be visible
+        item_card_locator = page.locator('div.item-card-inner:has(h3.title:text("Xarxa Hidrogràfica i Risc Inundació de les Illes Balears"))')
+        add_button = item_card_locator.locator('[data-dojo-attach-point="addButton"]')
+        add_button.wait_for(state="visible")  # Wait for the button to be visible
         add_button.click()  # Click the 'Afegir' button
         logger.info("'Afegir' button for Risc Inundació clicked successfully")
     except Exception as e:
         logger.error(f"Failed to click 'Afegir' button for Risc Inundació: {str(e)}")
+
+def close_afegir_dades(page):
+    """Close the afegir dades"""
+    try:
+        logger.info("Closing afegir dades...")
+        close_button = page.locator('div.close-btn.jimu-vcenter[data-dojo-attach-point="closeNode"]')
+        close_button.wait_for(state="visible")
+        close_button.click()  # Click the close button
+        logger.info("Afegir dades closed successfully")
+    except Exception as e:
+        logger.error(f"Failed to close afegir dades: {str(e)}")
 
 def zoom_in_three_times(page):
     """Zoom in three times"""
@@ -146,6 +158,7 @@ def get_flood_area_pdf(referencia_catastral):
         click_afegir_dades(page)
         input_inundacio_search(page)
         add_layer_risc_inundacio(page)
+        close_afegir_dades(page)
         click_locate_icon(page)
         click_cadastre_tab(page)
         enter_cadastral_reference(page, referencia_catastral)
@@ -186,7 +199,7 @@ def get_pdf_by_url(referencia_catastral):
 
 if __name__ == '__main__':
     # Test the PDF generation with a sample cadastral reference
-    sample_referencia_catastral = 'YOUR_CADASTRAL_REFERENCE'  # Replace with an actual reference
+    sample_referencia_catastral = '07045A00200407'  # Replace with an actual reference
     pdf_path = get_flood_area_pdf(sample_referencia_catastral)
     if pdf_path:
         print(f"PDF generated successfully: {pdf_path}")
