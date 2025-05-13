@@ -28,7 +28,7 @@ def close_initial_modal(page):
         ok_button.wait_for(state="visible")  # Wait for the button to be visible
         logger.info("Closing initial modal...")
         ok_button.click()
-        time.sleep(0.5)  # Reduced wait time
+        time.sleep(2)  # Reduced wait time
         logger.info("Initial modal closed successfully")
     except Exception as e:
         logger.error(f"Failed to close initial modal: {str(e)}")
@@ -144,6 +144,55 @@ def zoom_in_three_times(page):
     except Exception as e:
         logger.error(f"Failed to zoom in: {str(e)}")
 
+def click_print_icon(page):
+    """Click the print icon to open the print panel"""
+    try:
+        logger.info("Clicking print icon...")
+        img = page.locator('img.icon[src*="/visor/widgets/ideibPrint/images/icon.png"]')
+        img.wait_for(state="visible")
+        parent = img.locator('xpath=..')
+        parent.click()
+        time.sleep(1)  # Reduced wait
+        logger.info("Locate icon clicked successfully")
+    except Exception as e:
+        logger.error(f"Failed to click locate icon: {str(e)}")
+
+def click_imprimir(page):
+    """Click imprimir"""
+    try:
+        logger.info("Clicking imprimir...")
+        print_button = page.locator('[data-dojo-attach-point="printButtonDijit"]')
+        print_button.wait_for(state="visible")
+        print_button.click()
+        time.sleep(1)  # Reduced wait
+        logger.info("Imprimir clicked successfully")
+    except Exception as e:
+        logger.error(f"Failed to click imprimir: {str(e)}")
+
+def close_cerca_avancada(page):
+    """Close the cerca avançada panel"""
+    try:
+        logger.info("Closing cerca avançada panel...")
+        close_button = page.locator('div.close-icon.jimu-float-trailing[data-dojo-attach-point="closeNode"]')
+        close_button.wait_for(state="visible")
+        close_button.click()
+        time.sleep(1)  # Wait for panel to close
+        logger.info("Cerca avançada panel closed successfully")
+    except Exception as e:
+        logger.error(f"Failed to close cerca avançada panel: {str(e)}")
+
+def click_pdf(page):
+    """Click on the printed pdf"""
+    try:
+        logger.info("Clicking on the pdf...")
+        mapa_ideib = page.locator(':text("Mapa IDEIB")')
+        mapa_ideib.wait_for(state="visible")
+        mapa_ideib.click()
+        time.sleep(1)  # Wait for panel to close
+        logger.info("Mapa IDEIB clicked")
+    except Exception as e:
+        logger.error(f"Failed to click mapa IDEIB: {str(e)}")
+
 def get_flood_area_pdf(referencia_catastral):
     """
     Navigate to the IDEIB website and generate a PDF for the given cadastral reference
@@ -162,7 +211,11 @@ def get_flood_area_pdf(referencia_catastral):
         click_locate_icon(page)
         click_cadastre_tab(page)
         enter_cadastral_reference(page, referencia_catastral)
+        close_cerca_avancada(page)
         zoom_in_three_times(page)
+        click_print_icon(page)
+        click_imprimir(page)
+        click_pdf(page)
         time.sleep(100)
 
         
@@ -199,7 +252,7 @@ def get_pdf_by_url(referencia_catastral):
 
 if __name__ == '__main__':
     # Test the PDF generation with a sample cadastral reference
-    sample_referencia_catastral = '07045A00200407'  # Replace with an actual reference
+    sample_referencia_catastral = '7805508DD6870F'  # Replace with an actual reference
     pdf_path = get_flood_area_pdf(sample_referencia_catastral)
     if pdf_path:
         print(f"PDF generated successfully: {pdf_path}")
