@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IDEIB Aerial Photos Download</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 2em; max-width: 600px; margin: auto; }
+        .form-group { margin-bottom: 1em; }
+        label { display: block; margin-bottom: 0.5em; }
+        input[type="text"] { width: 100%; padding: 0.5em; box-sizing: border-box; }
+        button { padding: 0.7em 1.5em; cursor: pointer; }
+        #loading { display: none; margin-top: 1em; padding: 1em; background-color: #f0f0f0; border: 1px solid #ccc; }
+        #error-message { display: none; margin-top: 1em; padding: 1em; background-color: #ffdddd; border: 1px solid #fcc; color: #d8000c; }
+    </style>
+</head>
+<body>
+    <h1>Download IDEIB Aerial Photos</h1>
+    <p>Enter a cadastral reference below. The historical photos will be generated and zipped for download. This may take a few minutes.</p>
+    
+    <!-- Form now submits directly to the /get_photos endpoint -->
+    <form id="photo-form" action="/get_photos" method="POST">
+        <div class="form-group">
+            <label for="referencia_catastral">Cadastral Reference:</label>
+            <input type="text" id="referencia_catastral" name="referencia_catastral" required>
+        </div>
+        <button type="submit">Download Photos</button>
+    </form>
+
+    <div id="loading">Generating photos and zip file... Please wait. Your download will start automatically.</div>
+    <!-- Placeholder for potential error messages if needed, although server errors might not be easily shown here now -->
+    <div id="error-message"></div> 
+
+    <script>
+        // Basic script to show loading message on submit
+        document.getElementById('photo-form').addEventListener('submit', function(event) {
+            // Show loading indicator
+            document.getElementById('loading').style.display = 'block';
+            // Hide any previous error message
+            document.getElementById('error-message').style.display = 'none';
+            
+            // We let the form submit normally, which will trigger the file download response
+            // Optional: Disable button to prevent multiple submits
+            event.target.querySelector('button[type="submit"]').disabled = true;
+        });
+
+        // Note: Handling server-side errors (like 500 errors) and displaying them 
+        // here is more complex now because the primary expected response is a file download.
+        // If the server returns an error (e.g., JSON error response), the browser might 
+        // not trigger a download and might not automatically show the error in this page.
+        // Robust error handling might require more advanced techniques if needed.
+    </script>
+</body>
+</html> 

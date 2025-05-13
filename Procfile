@@ -1,0 +1,1 @@
+web: gunicorn pdf-inundaciones-ideib:app --bind 0.0.0.0:$PORT 
