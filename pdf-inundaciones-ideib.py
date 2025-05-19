@@ -130,17 +130,17 @@ def close_afegir_dades(page):
     except Exception as e:
         logger.error(f"Failed to close afegir dades: {str(e)}")
 
-def zoom_in_three_times(page):
-    """Zoom in three times"""
+def zoom_in_twice(page):
+    """Zoom in two times"""
     try:
-        logger.info("Zooming in three times...")
+        logger.info("Zooming in two times...")
         zoom_in_button = page.locator('div.zoom.zoom-in.jimu-corner-top.firstFocusNode[data-dojo-attach-point="btnZoomIn"]')
         zoom_in_button.wait_for(state="visible")
         
-        for i in range(3):
+        for i in range(2):
             zoom_in_button.click()
             time.sleep(0.5)  # Reduced wait
-            logger.info(f"Zoomed in {i+1}/3 times")
+            logger.info(f"Zoomed in {i+1}/2 times")
     except Exception as e:
         logger.error(f"Failed to zoom in: {str(e)}")
 
@@ -183,10 +183,11 @@ def close_cerca_avancada(page):
 
 def click_pdf(page):
     """Click on the printed pdf"""
+    time.sleep(5)
     try:
         logger.info("Clicking on the pdf...")
         mapa_ideib = page.locator(':text("Mapa IDEIB")')
-        mapa_ideib.wait_for(state="visible")
+        mapa_ideib.wait_for(state="visible", timeout=180000)  # Increased timeout to 60 seconds
         mapa_ideib.click()
         time.sleep(1)  # Wait for panel to close
         logger.info("Mapa IDEIB clicked")
@@ -209,6 +210,45 @@ def next_tab(page):
     except Exception as e:
         logger.error(f"Failed to switch to next tab: {str(e)}")
         return None
+
+def click_download_button(page):
+    """Click the download button in the PDF viewer"""
+    time.sleep(5)
+    try:
+        logger.info("Clicking download button...")
+        # Wait for the page to be fully loaded
+        page.wait_for_load_state('networkidle')
+        
+        # Get the viewport size
+        viewport = page.viewport_size
+        if not viewport:
+            raise Exception("Could not get viewport size")
+            
+        # Take a screenshot first to help with positioning (optional, for debugging)
+        screenshot_path = os.path.join(os.getcwd(), 'download_button_debug.png')
+        page.screenshot(path=screenshot_path)
+        logger.info(f"Screenshot saved to {screenshot_path}")
+        
+        # Adjusted coordinates based on the debug screenshot
+        # These are approximate, may need slight tuning
+        x = viewport['width'] - 95  # Approximately 95 pixels from the right edge
+        y = 35  # Approximately 35 pixels from the top
+        
+        logger.info(f"Clicking at coordinates: x={x}, y={y}")
+        page.mouse.click(x, y)
+        logger.info("Download button clicked successfully")
+    except Exception as e:
+        logger.error(f"Failed to click download button: {str(e)}")
+        # Log the page content for debugging
+        logger.error("Complete page HTML content:")
+        logger.error(page.content())
+        # Take a screenshot for debugging
+        try:
+            screenshot_path = os.path.join(os.getcwd(), 'download_button_debug.png')
+            page.screenshot(path=screenshot_path)
+            logger.info(f"Screenshot saved to {screenshot_path}")
+        except Exception as screenshot_error:
+            logger.error(f"Failed to take screenshot: {str(screenshot_error)}")
 
 def download_pdf(page):
     """Download the PDF from the current page"""
@@ -268,7 +308,7 @@ def get_flood_area_pdf(referencia_catastral):
         click_cadastre_tab(page)
         enter_cadastral_reference(page, referencia_catastral)
         close_cerca_avancada(page)
-        zoom_in_three_times(page)
+        zoom_in_twice(page)
         click_print_icon(page)
         click_imprimir(page)
         click_pdf(page)
@@ -280,9 +320,8 @@ def get_flood_area_pdf(referencia_catastral):
         if new_page:
             # Wait for the download to start and get the Download object
             with new_page.expect_download() as download_info:
-                 # Playwright will automatically detect the download initiated by the new page content
-                 # No need to click a specific download button here as the page itself is the PDF
-                pass # The expect_download context manager handles the waiting
+                # Click the download button in the new tab
+                click_download_button(new_page)
 
             download = download_info.value
             
@@ -306,11 +345,6 @@ def get_flood_area_pdf(referencia_catastral):
             download.save_as(pdf_path)
             logger.info(f"PDF downloaded successfully to {pdf_path}")
 
-
-        #time.sleep(100) # Removed unnecessary sleep
-
-        
-        #pdf_path = generate_pdf(page, referencia_catastral) # Removed unused function call
         browser.close()
         return pdf_path
 
