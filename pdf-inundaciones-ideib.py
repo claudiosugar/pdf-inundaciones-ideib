@@ -193,6 +193,62 @@ def click_pdf(page):
     except Exception as e:
         logger.error(f"Failed to click mapa IDEIB: {str(e)}")
 
+def next_tab(page):
+    """Go to next tab"""
+    try:
+        logger.info("Switching to next tab...")
+        # Wait for the new tab to be created
+        page.wait_for_timeout(2000)  # Wait for 2 seconds for the new tab to open
+        # Get all pages
+        pages = page.context.pages
+        # Switch to the last opened page (the new tab)
+        new_page = pages[-1]
+        new_page.wait_for_load_state('networkidle')
+        logger.info("Successfully switched to new tab")
+        return new_page
+    except Exception as e:
+        logger.error(f"Failed to switch to next tab: {str(e)}")
+        return None
+
+def download_pdf(page):
+    """Download the PDF from the current page"""
+    try:
+        logger.info("Starting PDF download...")
+        # Wait for the PDF to be loaded
+        page.wait_for_timeout(3000)  # Wait for 3 seconds for PDF to load
+        
+        # Get the download path
+        download_path = os.path.join(os.getcwd(), 'downloads')
+        if not os.path.exists(download_path):
+            os.makedirs(download_path)
+            
+        # Generate unique filename based on timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        pdf_filename = f'flood_area_{timestamp}.pdf'
+        pdf_path = os.path.join(download_path, pdf_filename)
+        
+        # Set up download behavior
+        page.context.set_default_download_behavior('accept', download_path)
+        
+        # Click the download button (usually a save icon or download button)
+        download_button = page.locator('button.download-button, a.download-link, [aria-label="Download"]')
+        if download_button.is_visible():
+            download_button.click()
+            logger.info("Download button clicked")
+        else:
+            # If no download button is found, try to save the page as PDF
+            page.pdf(path=pdf_path)
+            logger.info("Page saved as PDF")
+            
+        # Wait for download to complete
+        page.wait_for_timeout(5000)  # Wait for 5 seconds for download to complete
+        
+        logger.info(f"PDF downloaded successfully to {pdf_path}")
+        return pdf_path
+    except Exception as e:
+        logger.error(f"Failed to download PDF: {str(e)}")
+        return None
+
 def get_flood_area_pdf(referencia_catastral):
     """
     Navigate to the IDEIB website and generate a PDF for the given cadastral reference
@@ -216,10 +272,45 @@ def get_flood_area_pdf(referencia_catastral):
         click_print_icon(page)
         click_imprimir(page)
         click_pdf(page)
-        time.sleep(100)
+        
+        # Wait for and switch to the new tab
+        new_page = next_tab(page)
+        
+        pdf_path = None
+        if new_page:
+            # Wait for the download to start and get the Download object
+            with new_page.expect_download() as download_info:
+                 # Playwright will automatically detect the download initiated by the new page content
+                 # No need to click a specific download button here as the page itself is the PDF
+                pass # The expect_download context manager handles the waiting
+
+            download = download_info.value
+            
+            # Define the download path
+            download_dir = os.path.join(os.getcwd(), 'downloads')
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+                
+            # Generate a unique filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            original_filename = download.suggested_filename
+            # Sanitize filename to prevent issues
+            safe_filename = "".join([c for c in original_filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_')]).rstrip()
+            if not safe_filename.lower().endswith('.pdf'):
+                safe_filename += '.pdf'
+            
+            pdf_filename = f'flood_area_{timestamp}_{safe_filename}'
+            pdf_path = os.path.join(download_dir, pdf_filename)
+
+            # Save the downloaded file
+            download.save_as(pdf_path)
+            logger.info(f"PDF downloaded successfully to {pdf_path}")
+
+
+        #time.sleep(100) # Removed unnecessary sleep
 
         
-        pdf_path = generate_pdf(page, referencia_catastral)
+        #pdf_path = generate_pdf(page, referencia_catastral) # Removed unused function call
         browser.close()
         return pdf_path
 
