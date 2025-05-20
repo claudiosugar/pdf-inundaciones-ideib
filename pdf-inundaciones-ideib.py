@@ -182,30 +182,60 @@ def close_cerca_avancada(page):
         logger.error(f"Failed to close cerca avançada panel: {str(e)}")
 
 def click_pdf(page):
-    """Click on the printed pdf"""
+    """Click on the printed pdf and get its URL"""
     time.sleep(5)
     try:
         logger.info("Clicking on the pdf...")
         mapa_ideib = page.locator(':text("Mapa IDEIB")')
         mapa_ideib.wait_for(state="visible", timeout=180000)  # Increased timeout to 60 seconds
-        mapa_ideib.click()
-        time.sleep(1)  # Wait for panel to close
-        logger.info("Mapa IDEIB clicked")
+        
+        # Set up download listener before clicking
+        with page.expect_download() as download_info:
+            mapa_ideib.click()
+            time.sleep(1)  # Wait for panel to close
+            logger.info("Mapa IDEIB clicked")
+            
+            # Wait for download to start
+            download = download_info.value
+            logger.info(f"Download started: {download.suggested_filename}")
+            
+            # Define the download path
+            download_dir = os.path.join(os.getcwd(), 'downloads')
+            if not os.path.exists(download_dir):
+                os.makedirs(download_dir)
+                
+            # Generate a unique filename
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            original_filename = download.suggested_filename
+            # Sanitize filename to prevent issues
+            safe_filename = "".join([c for c in original_filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_')]).rstrip()
+            if not safe_filename.lower().endswith('.pdf'):
+                safe_filename += '.pdf'
+            
+            pdf_filename = f'flood_area_{timestamp}_{safe_filename}'
+            pdf_path = os.path.join(download_dir, pdf_filename)
+
+            # Save the downloaded file
+            download.save_as(pdf_path)
+            logger.info(f"PDF downloaded successfully to {pdf_path}")
+            return pdf_path
+            
     except Exception as e:
         logger.error(f"Failed to click mapa IDEIB: {str(e)}")
+        return None
 
 def next_tab(page):
     """Go to next tab"""
     try:
         logger.info("Switching to next tab...")
         # Wait for the new tab to be created
-        page.wait_for_timeout(2000)  # Wait for 2 seconds for the new tab to open
+        page.wait_for_timeout(5000)  # Increased wait time to 5 seconds
         # Get all pages
         pages = page.context.pages
         # Switch to the last opened page (the new tab)
         new_page = pages[-1]
-        new_page.wait_for_load_state('networkidle')
-        logger.info("Successfully switched to new tab")
+        new_page.wait_for_load_state('networkidle', timeout=60000)  # Increased timeout to 60 seconds
+        logger.info(f"Successfully switched to new tab. URL: {new_page.url}")
         return new_page
     except Exception as e:
         logger.error(f"Failed to switch to next tab: {str(e)}")
@@ -213,29 +243,43 @@ def next_tab(page):
 
 def click_download_button(page):
     """Click the download button in the PDF viewer"""
-    time.sleep(5)
     try:
-        logger.info("Clicking download button...")
+        logger.info("Waiting for PDF viewer to load...")
+        # Wait longer for the PDF to load
+        page.wait_for_timeout(10000)  # Wait 10 seconds
+        
         # Wait for the page to be fully loaded
-        page.wait_for_load_state('networkidle')
+        page.wait_for_load_state('networkidle', timeout=60000)  # Increased timeout to 60 seconds
         
         # Get the viewport size
         viewport = page.viewport_size
         if not viewport:
             raise Exception("Could not get viewport size")
             
-        # Take a screenshot first to help with positioning (optional, for debugging)
-        screenshot_path = os.path.join(os.getcwd(), 'download_button_debug.png')
-        page.screenshot(path=screenshot_path)
-        logger.info(f"Screenshot saved to {screenshot_path}")
+        # Take a screenshot first to help with positioning
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        screenshot_path = os.path.join(os.getcwd(), f'pdf_viewer_{timestamp}.png')
+        page.screenshot(path=screenshot_path, full_page=True)
+        logger.info(f"Full page screenshot saved to {screenshot_path}")
         
-        # Adjusted coordinates based on the debug screenshot
-        # These are approximate, may need slight tuning
-        x = viewport['width'] - 95  # Approximately 95 pixels from the right edge
-        y = 35  # Approximately 35 pixels from the top
+        # Log the page content for debugging
+        logger.info("Page content:")
+        logger.info(page.content())
         
-        logger.info(f"Clicking at coordinates: x={x}, y={y}")
-        page.mouse.click(x, y)
+        # Try to find the download button by various selectors
+        download_button = page.locator('button.download-button, a.download-link, [aria-label="Download"], [title="Download"]')
+        if download_button.is_visible():
+            logger.info("Found download button by selector")
+            download_button.click()
+        else:
+            # If no download button is found, try clicking at coordinates
+            logger.info("Download button not found by selector, trying coordinates")
+            x = viewport['width'] - 95  # Approximately 95 pixels from the right edge
+            y = 35  # Approximately 35 pixels from the top
+            
+            logger.info(f"Clicking at coordinates: x={x}, y={y}")
+            page.mouse.click(x, y)
+        
         logger.info("Download button clicked successfully")
     except Exception as e:
         logger.error(f"Failed to click download button: {str(e)}")
@@ -244,11 +288,12 @@ def click_download_button(page):
         logger.error(page.content())
         # Take a screenshot for debugging
         try:
-            screenshot_path = os.path.join(os.getcwd(), 'download_button_debug.png')
-            page.screenshot(path=screenshot_path)
-            logger.info(f"Screenshot saved to {screenshot_path}")
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            screenshot_path = os.path.join(os.getcwd(), f'pdf_viewer_error_{timestamp}.png')
+            page.screenshot(path=screenshot_path, full_page=True)
+            logger.info(f"Error screenshot saved to {screenshot_path}")
         except Exception as screenshot_error:
-            logger.error(f"Failed to take screenshot: {str(screenshot_error)}")
+            logger.error(f"Failed to take error screenshot: {str(screenshot_error)}")
 
 def download_pdf(page):
     """Download the PDF from the current page"""
@@ -295,8 +340,19 @@ def get_flood_area_pdf(referencia_catastral):
     Returns the path to the generated PDF
     """
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Run in headless mode for better performance
-        page = browser.new_page()
+        browser = p.chromium.launch(headless=True)  # Run in headless mode for better performance
+        
+        # Set up download directory
+        download_dir = os.path.join(os.getcwd(), 'downloads')
+        if not os.path.exists(download_dir):
+            os.makedirs(download_dir)
+            
+        # Create context with download behavior
+        context = browser.new_context(
+            accept_downloads=True
+        )
+        page = context.new_page()
+        
         page.goto('https://ideib.caib.es/visor/')
         maximize_window(page)
         close_initial_modal(page)
@@ -311,40 +367,10 @@ def get_flood_area_pdf(referencia_catastral):
         zoom_in_twice(page)
         click_print_icon(page)
         click_imprimir(page)
-        click_pdf(page)
         
-        # Wait for and switch to the new tab
-        new_page = next_tab(page)
+        # Handle PDF download in the main tab
+        pdf_path = click_pdf(page)
         
-        pdf_path = None
-        if new_page:
-            # Wait for the download to start and get the Download object
-            with new_page.expect_download() as download_info:
-                # Click the download button in the new tab
-                click_download_button(new_page)
-
-            download = download_info.value
-            
-            # Define the download path
-            download_dir = os.path.join(os.getcwd(), 'downloads')
-            if not os.path.exists(download_dir):
-                os.makedirs(download_dir)
-                
-            # Generate a unique filename
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            original_filename = download.suggested_filename
-            # Sanitize filename to prevent issues
-            safe_filename = "".join([c for c in original_filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_')]).rstrip()
-            if not safe_filename.lower().endswith('.pdf'):
-                safe_filename += '.pdf'
-            
-            pdf_filename = f'flood_area_{timestamp}_{safe_filename}'
-            pdf_path = os.path.join(download_dir, pdf_filename)
-
-            # Save the downloaded file
-            download.save_as(pdf_path)
-            logger.info(f"PDF downloaded successfully to {pdf_path}")
-
         browser.close()
         return pdf_path
 
