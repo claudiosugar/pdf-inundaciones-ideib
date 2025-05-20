@@ -1,13 +1,13 @@
-# PDF Inundaciones IDEIB
+# Foto Inundaciones IDEIB
 
-A web application that automates the process of retrieving flood risk information for properties in the Balearic Islands (Spain) using cadastral references. The application interacts with the IDEIB (Infraestructura de Dades Espacials de les Illes Balears) website to generate flood risk maps and reports.
+A web application that automates the process of retrieving flood risk information for properties in the Balearic Islands (Spain) using cadastral references. The application interacts with the IDEIB (Infraestructura de Dades Espacials de les Illes Balears) website to generate flood risk maps as images.
 
 ## Features
 
 - Web interface for entering cadastral references
 - Automated browser interaction with the IDEIB website
 - Retrieval of flood risk information for specific properties
-- PDF generation of flood risk maps
+- Image generation of flood risk maps
 - Docker support for easy deployment
 
 ## How It Works
@@ -20,7 +20,7 @@ The application uses Playwright to automate browser interactions with the IDEIB 
    - Add flood risk data layers to the map
    - Search for the specified cadastral reference
    - Zoom in to the property
-   - Generate a PDF of the flood risk information
+   - Generate an image of the flood risk information
 
 ## Requirements
 
@@ -53,37 +53,37 @@ The application uses Playwright to automate browser interactions with the IDEIB 
 
 1. Build the Docker image:
    ```
-   docker build -t pdf-inundaciones-ideib .
+   docker build -t foto-inundaciones-ideib .
    ```
 
 2. Run the container:
    ```
-   docker run -p 8080:8080 pdf-inundaciones-ideib
+   docker run -p 8080:8080 foto-inundaciones-ideib
    ```
 
 ## Usage
 
 1. Start the application:
    ```
-   python pdf-inundaciones-ideib.py
+   python foto-inundaciones-ideib.py
    ```
    
    Or with Gunicorn (for production):
    ```
-   gunicorn --bind 0.0.0.0:8080 --timeout 600 pdf-inundaciones-ideib:app
+   gunicorn --bind 0.0.0.0:8080 --timeout 600 foto-inundaciones-ideib:app
    ```
 
 2. Open a web browser and navigate to `http://localhost:8080`
 
 3. Enter a cadastral reference in the form and submit
 
-4. The application will generate a PDF with flood risk information for the specified property
+4. The application will generate an image with flood risk information for the specified property
 
 ## API Endpoints
 
 - `GET /`: Main page with the form
-- `POST /get_pdf`: Endpoint to generate and download a PDF for a given cadastral reference
-- `GET /<referencia_catastral>`: Direct URL access to generate a PDF for a specific cadastral reference
+- `POST /get_image`: Endpoint to generate and download an image for a given cadastral reference
+- `GET /<referencia_catastral>`: Direct URL access to generate an image for a specific cadastral reference
 
 ## Deployment
 
