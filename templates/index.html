@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IDEIB Flood Risk Image Download</title>
+    <title>IDEIB Flood Risk PDF Download</title>
     <style>
         body { font-family: sans-serif; line-height: 1.6; padding: 2em; max-width: 600px; margin: auto; }
         .form-group { margin-bottom: 1em; }
@@ -15,25 +15,25 @@
     </style>
 </head>
 <body>
-    <h1>Download IDEIB Flood Risk Image</h1>
-    <p>Enter a cadastral reference below. An image showing the flood risk for the corresponding area will be generated for download. This may take a few minutes.</p>
+    <h1>Download IDEIB Flood Risk PDF</h1>
+    <p>Enter a cadastral reference below. A PDF showing the flood risk for the corresponding area will be generated for download. This may take a few minutes.</p>
     
-    <!-- Form submits to the /get_image endpoint -->
-    <form id="image-form" action="/get_image" method="POST">
+    <!-- Form submits to the /get_pdf endpoint -->
+    <form id="pdf-form" action="/get_pdf" method="POST">
         <div class="form-group">
             <label for="referencia_catastral">Cadastral Reference:</label>
             <input type="text" id="referencia_catastral" name="referencia_catastral" required>
         </div>
-        <button type="submit">Download Flood Risk Image</button>
+        <button type="submit">Download Flood Risk PDF</button>
     </form>
 
-    <div id="loading">Generating image... Please wait. Your download will start automatically.</div>
+    <div id="loading">Generating PDF... Please wait. Your download will start automatically.</div>
     <!-- Placeholder for potential error messages if needed -->
     <div id="error-message"></div> 
 
     <script>
         // Basic script to show loading message on submit
-        document.getElementById('image-form').addEventListener('submit', function(event) {
+        document.getElementById('pdf-form').addEventListener('submit', function(event) {
             // Show loading indicator
             document.getElementById('loading').style.display = 'block';
             // Hide any previous error message

@@ -295,7 +295,7 @@ def get_flood_area_pdf(referencia_catastral):
     Returns the path to the generated PDF
     """
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Changed to False to see browser actions
+        browser = p.chromium.launch(headless=False)  # Run in headless mode for better performance
         page = browser.new_page()
         page.goto('https://ideib.caib.es/visor/')
         maximize_window(page)
@@ -377,12 +377,12 @@ def get_pdf_by_url(referencia_catastral):
 
 if __name__ == '__main__':
     # Test the PDF generation with a sample cadastral reference
-    sample_referencia_catastral = '07040A04900017'  # Replace with an actual reference
-    pdf_path = get_flood_area_pdf(sample_referencia_catastral)
-    if pdf_path:
-        print(f"PDF generated successfully: {pdf_path}")
-    else:
-        print("Failed to generate PDF.")
+    # sample_referencia_catastral = '07040A04900017'  # Replace with an actual reference
+    # pdf_path = get_flood_area_pdf(sample_referencia_catastral)
+    # if pdf_path:
+    #     print(f"PDF generated successfully: {pdf_path}")
+    # else:
+    #     print("Failed to generate PDF.")
 
 
-        #app.run(debug=True)
+    app.run(debug=True)
