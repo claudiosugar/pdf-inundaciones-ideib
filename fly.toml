@@ -1,0 +1,30 @@
+# fly.toml app configuration file generated for pdf-inundaciones-ideib on 2025-05-20T17:02:37+02:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'pdf-inundaciones-ideib'
+primary_region = 'mad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  FLY_APP_NAME = 'pdf-inundaciones-ideib'
+  PORT = '8080'
+
+[[mounts]]
+  source = 'downloads'
+  destination = '/app/downloads'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1

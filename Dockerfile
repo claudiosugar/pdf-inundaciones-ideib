@@ -4,7 +4,6 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 
-
 RUN python -m venv .venv
 COPY requirements.txt ./
 RUN .venv/bin/pip install --no-cache-dir -r requirements.txt
@@ -38,6 +37,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libexpat1 \
     wget \
     ca-certificates \
+    xvfb \
+    xauth \
     # Clean up apt cache
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
@@ -55,27 +56,13 @@ COPY . .
 # Using --with-deps might be redundant now but is safe
 RUN .venv/bin/playwright install --with-deps chromium
 
-<<<<<<< HEAD
-# Install and pre-download Playwright browsers
-# Use Xvfb to create a virtual display for Playwright installation
-RUN PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright \
-    python3 install_playwright.py
-
 # Expose port
 EXPOSE 8080
 
-# Set the entrypoint using Xvfb for headless browser support
+# Set environment variables
 ENV PORT=8080 \
-    PLAYWRIGHT_BROWSERS_PATH=/app/ms-playwright
+    NODE_OPTIONS="--max-old-space-size=3072"
 
 # Start app with Xvfb to provide virtual display
-# Add memory limit for Node.js used by Playwright
-ENV NODE_OPTIONS="--max-old-space-size=3072"
 CMD xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" \
-    gunicorn --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --threads 2 pdf-inundaciones-ideib:app
-=======
-# Set the command to run gunicorn using the shell form to allow $PORT substitution
-# Increase worker timeout to 360 seconds for long-running Playwright tasks
-ENV PORT=8080
-CMD /app/.venv/bin/gunicorn --workers 1 --timeout 360 fotos-aereas-ideib:app --bind :$PORT
->>>>>>> parent of 223eb22 (Optimize application for fly.io deployment, add memory improvements and batch processing)
+    /app/.venv/bin/gunicorn --bind 0.0.0.0:$PORT --timeout 600 --workers 1 --threads 2 pdf-inundaciones-ideib:app
