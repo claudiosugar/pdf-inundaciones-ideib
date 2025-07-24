@@ -4,6 +4,8 @@ import logging
 from flask import Flask, render_template, request, send_file, jsonify, after_this_request
 import os
 from datetime import datetime
+import tempfile
+import threading
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -182,44 +184,30 @@ def close_cerca_avancada(page):
         logger.error(f"Failed to close cerca avançada panel: {str(e)}")
 
 def click_pdf(page):
-    """Click on the printed pdf and get its URL"""
     time.sleep(5)
     try:
         logger.info("Clicking on the pdf...")
         mapa_ideib = page.locator(':text("Mapa IDEIB")')
-        mapa_ideib.wait_for(state="visible", timeout=180000)  # Increased timeout to 60 seconds
-        
-        # Set up download listener before clicking
+        mapa_ideib.wait_for(state="visible", timeout=180000)
         with page.expect_download() as download_info:
             mapa_ideib.click()
-            time.sleep(1)  # Wait for panel to close
+            time.sleep(1)
             logger.info("Mapa IDEIB clicked")
-            
-            # Wait for download to start
             download = download_info.value
             logger.info(f"Download started: {download.suggested_filename}")
-            
-            # Define the download path
             download_dir = os.path.join(os.getcwd(), 'downloads')
             if not os.path.exists(download_dir):
                 os.makedirs(download_dir)
-                
-            # Generate a unique filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             original_filename = download.suggested_filename
-            # Sanitize filename to prevent issues
             safe_filename = "".join([c for c in original_filename if c.isalpha() or c.isdigit() or c in (' ', '.', '_')]).rstrip()
             if not safe_filename.lower().endswith('.pdf'):
                 safe_filename += '.pdf'
-            
             pdf_filename = f'flood_area_{timestamp}_{safe_filename}'
             pdf_path = os.path.join(download_dir, pdf_filename)
-
-            # Save the downloaded file
             download.save_as(pdf_path)
             logger.info(f"PDF downloaded successfully to {pdf_path}")
             return pdf_path
-            
     except Exception as e:
         logger.error(f"Failed to click mapa IDEIB: {str(e)}")
         return None
@@ -339,40 +327,104 @@ def get_flood_area_pdf(referencia_catastral):
     Navigate to the IDEIB website and generate a PDF for the given cadastral reference
     Returns the path to the generated PDF
     """
+    from flask import current_app
+    import os
+    is_production = os.environ.get('FLY_APP_NAME') is not None
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Run in headless mode for better performance
-        
-        # Set up download directory
-        download_dir = os.path.join(os.getcwd(), 'downloads')
-        if not os.path.exists(download_dir):
-            os.makedirs(download_dir)
-            
-        # Create context with download behavior
-        context = browser.new_context(
-            accept_downloads=True
-        )
-        page = context.new_page()
-        
-        page.goto('https://ideib.caib.es/visor/')
-        maximize_window(page)
-        close_initial_modal(page)
-        click_afegir_dades(page)
-        input_inundacio_search(page)
-        add_layer_risc_inundacio(page)
-        close_afegir_dades(page)
-        click_locate_icon(page)
-        click_cadastre_tab(page)
-        enter_cadastral_reference(page, referencia_catastral)
-        close_cerca_avancada(page)
-        zoom_in_twice(page)
-        click_print_icon(page)
-        click_imprimir(page)
-        
-        # Handle PDF download in the main tab
-        pdf_path = click_pdf(page)
-        
-        browser.close()
-        return pdf_path
+        # Use launch options similar to fotos-aereas-ideib
+        launch_options = {
+            "headless": True,  # or False if you want non-headless
+            "args": [
+                "--disable-dev-shm-usage",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-gpu",
+                "--disable-software-rasterizer",
+                "--single-process",
+                "--disable-extensions",
+                "--disable-popup-blocking"
+            ] if is_production else []
+        }
+        browser = p.chromium.launch(**launch_options)
+        context = None
+        page = None
+        try:
+            # Set viewport and default timeout as in fotos-aereas-ideib
+            context = browser.new_context(viewport={"width": 1280, "height": 800})
+            page = context.new_page()
+            page.set_default_timeout(60000)  # 60 seconds
+            logger.info("Navigating to IDEIB visor...")
+            page.goto('https://ideib.caib.es/visor/', timeout=90000)
+            page.wait_for_load_state("networkidle", timeout=90000)
+            logger.info("Page loaded.")
+            close_initial_modal(page)
+            click_afegir_dades(page)
+            input_inundacio_search(page)
+            add_layer_risc_inundacio(page)
+            close_afegir_dades(page)
+            click_locate_icon(page)
+            click_cadastre_tab(page)
+            enter_cadastral_reference(page, referencia_catastral)
+            close_cerca_avancada(page)
+            zoom_in_twice(page)
+            click_print_icon(page)
+            click_imprimir(page)
+            # Handle PDF download in the main tab
+            pdf_path = click_pdf(page)
+            return pdf_path
+        except Exception as e:
+            logger.error(f"Error in get_flood_area_pdf: {e}")
+            return None
+        finally:
+            if page is not None:
+                try:
+                    page.close()
+                except Exception as e:
+                    logger.error(f"Error closing page: {e}")
+            if context is not None:
+                try:
+                    context.close()
+                except Exception as e:
+                    logger.error(f"Error closing context: {e}")
+            try:
+                browser.close()
+            except Exception as e:
+                logger.error(f"Error closing browser: {e}")
+
+def process_and_send_pdf(referencia_catastral):
+    """Helper function to generate PDF, send it, and clean up after."""
+    try:
+        pdf_path = get_flood_area_pdf(referencia_catastral)
+        if not pdf_path or not os.path.exists(pdf_path):
+            return jsonify({'error': 'Failed to generate PDF'}), 500
+
+        # Schedule the PDF file for deletion after the request is sent, with a delay
+        @after_this_request
+        def cleanup(response):
+            def delayed_delete(path):
+                time.sleep(2)  # Wait 2 seconds to ensure file is closed
+                try:
+                    os.remove(path)
+                    logger.info(f"Successfully removed temporary PDF file: {path}")
+                except Exception as error:
+                    logger.error(f"Error removing temporary PDF file {path}: {error}")
+            threading.Thread(target=delayed_delete, args=(pdf_path,)).start()
+            return response
+
+        # Send the PDF file as an attachment
+        pdf_download_name = f"flood_area_{referencia_catastral}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        logger.info(f"Sending PDF file {pdf_path} as attachment: {pdf_download_name}")
+        return send_file(pdf_path, as_attachment=True, download_name=pdf_download_name)
+
+    except Exception as e:
+        logger.error(f"Error processing PDF request for {referencia_catastral}: {str(e)}")
+        if 'pdf_path' in locals() and os.path.exists(pdf_path):
+            try:
+                os.remove(pdf_path)
+                logger.info(f"Cleaned up PDF file {pdf_path} after error.")
+            except Exception as cleanup_error:
+                logger.error(f"Error cleaning up PDF file {pdf_path} after error: {cleanup_error}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/')
 def index():
@@ -387,19 +439,11 @@ def get_pdf():
     referencia_catastral = request.form.get('referencia_catastral')
     if not referencia_catastral:
         return jsonify({'error': 'No cadastral reference provided'}), 400
-    pdf_path = get_flood_area_pdf(referencia_catastral)
-    if pdf_path:
-        return send_file(pdf_path, as_attachment=True)
-    else:
-        return jsonify({'error': 'Failed to generate PDF'}), 500
+    return process_and_send_pdf(referencia_catastral)
 
 @app.route('/<string:referencia_catastral>', methods=['GET'])
 def get_pdf_by_url(referencia_catastral):
-    pdf_path = get_flood_area_pdf(referencia_catastral)
-    if pdf_path:
-        return send_file(pdf_path, as_attachment=True)
-    else:
-        return jsonify({'error': 'Failed to generate PDF'}), 500
+    return process_and_send_pdf(referencia_catastral)
 
 if __name__ == '__main__':
     # Test the PDF generation with a sample cadastral reference

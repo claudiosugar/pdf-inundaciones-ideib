@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Define years to screenshot (Reduced for testing)
-years_to_screenshot = [1956, 1984, 1989, 2001] # Was [1956, 1984, 1989, 2001, 2002, 2006, 2008, 2010, 2012, 2015, 2018, 2021, 2023]
+years_to_screenshot = [1956, 1984, 1989, 2001, 2002, 2006, 2008, 2010, 2012, 2015, 2018, 2021, 2023]
 
 app = Flask(__name__)
 
@@ -25,7 +25,7 @@ def maximize_window(page):
     """Maximize the browser window"""
     try:
         logger.info("Maximizing browser window...")
-        page.set_viewport_size({"width": 1920, "height": 1080})
+        # We now handle this in browser initialization with viewport
         logger.info("Browser window maximized successfully")
     except Exception as e:
         logger.error(f"Failed to maximize window: {str(e)}")
@@ -37,7 +37,7 @@ def close_initial_modal(page):
         ok_button = page.locator('div.jimu-btn.jimu-float-trailing.enable-btn[data-dojo-attach-point="okNode"]')
         ok_button.wait_for(state="visible")
         ok_button.click()
-        time.sleep(1)  # Wait for modal to close
+        time.sleep(0.5)  # Reduced wait time
         logger.info("Initial modal closed successfully")
     except Exception as e:
         logger.error(f"Failed to close initial modal: {str(e)}")
@@ -50,7 +50,7 @@ def click_locate_icon(page):
         img.wait_for(state="visible")
         parent = img.locator('xpath=..')
         parent.click()
-        time.sleep(2)  # Wait for search panel to appear
+        time.sleep(1)  # Reduced wait
         logger.info("Locate icon clicked successfully")
     except Exception as e:
         logger.error(f"Failed to click locate icon: {str(e)}")
@@ -62,7 +62,7 @@ def click_cadastre_tab(page):
         cadastre_tab = page.locator('div.tab.jimu-vcenter-text[label="Cadastre"]')
         cadastre_tab.wait_for(state="visible")
         cadastre_tab.click()
-        time.sleep(2)  # Wait for tab to be selected
+        time.sleep(1)  # Reduced wait
         logger.info("Cadastre tab clicked successfully")
     except Exception as e:
         logger.error(f"Failed to click Cadastre tab: {str(e)}")
@@ -90,9 +90,9 @@ def close_left_column(page):
     try:
         left_column = page.locator('.bar.max')
         if left_column.is_visible():
-            time.sleep(0.5)
+            time.sleep(0.3)  # Reduced wait
             left_column.click()  # First click
-            time.sleep(0.5)
+            time.sleep(0.3)  # Reduced wait
             left_column.click()  # Second click
             logger.info("Left column closed/minimized.")
     except Exception as e:
@@ -133,12 +133,12 @@ def zoom_in_three_times(page):
     """Zoom in three times"""
     try:
         logger.info("Zooming in three times...")
+        zoom_in_button = page.locator('div.zoom.zoom-in.jimu-corner-top.firstFocusNode[data-dojo-attach-point="btnZoomIn"]')
+        zoom_in_button.wait_for(state="visible")
+        
         for i in range(3):
-            # Find and click the zoom in button
-            zoom_in_button = page.locator('div.zoom.zoom-in.jimu-corner-top.firstFocusNode[data-dojo-attach-point="btnZoomIn"]')
-            zoom_in_button.wait_for(state="visible")
             zoom_in_button.click()
-            time.sleep(1)  # Wait for zoom animation
+            time.sleep(0.5)  # Reduced wait
             logger.info(f"Zoomed in {i+1}/3 times")
     except Exception as e:
         logger.error(f"Failed to zoom in: {str(e)}")
@@ -200,21 +200,46 @@ def get_aerial_photos(referencia_catastral):
     """
     screenshot_paths = []
     try:
+        # Check if running on Fly.io or similar cloud environment
+        is_production = os.environ.get('FLY_APP_NAME') is not None
+
         with sync_playwright() as p:
-            # Launch browser
-            # Consider headless=False for local debugging if needed
-            browser = p.chromium.launch(headless=True) 
-            page = browser.new_page()
+            # Launch browser - use headless True in production, False in local testing
+            launch_options = {
+                "headless": is_production, 
+                # Add args for better containerized browser support and memory optimization
+                "args": [
+                    "--disable-dev-shm-usage",
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer",
+                    "--single-process",
+                    "--disable-extensions",
+                    "--disable-popup-blocking"
+                ] if is_production else []
+            }
             
-            # Maximize window
-            maximize_window(page)
+            # Add timeout for page operations
+            browser = p.chromium.launch(**launch_options)
             
-            # Navigate to the IDEIB website
+            # Increase timeout to 60 seconds for all operations
+            # Set a viewport size that's not too large to reduce memory usage
+            page = browser.new_page(
+                viewport={"width": 1280, "height": 800}
+            )
+            page.set_default_timeout(60000)  # 60 seconds
+            
+            # Navigate to the IDEIB website with longer timeout
             logger.info("Navigating to IDEIB website...")
-            page.goto("https://ideib.caib.es/visor/")
-            page.wait_for_load_state("networkidle")
+            page.goto("https://ideib.caib.es/visor/", timeout=90000)  # 90 seconds timeout for initial load
+            page.wait_for_load_state("networkidle", timeout=90000)
             
             # Execute all steps in sequence
+            # Skip maximize_window as we already set viewport size
+            logger.info("Setting up the view...")
+            
+            # Reduce wait times between actions
             close_initial_modal(page)
             close_left_column(page)
             click_locate_icon(page)
@@ -224,12 +249,26 @@ def get_aerial_photos(referencia_catastral):
             zoom_in_three_times(page)
             hide_ui_elements(page)
             
-            # Select historical photos and take screenshots for each year
+            # Process years in batches to reduce memory pressure
+            logger.info(f"Taking screenshots for years: {years_to_screenshot}")
             select_historical_photos(page)
-            for year in years_to_screenshot:
-                screenshot_path = select_year_and_screenshot(page, year, referencia_catastral)
-                if screenshot_path:
-                    screenshot_paths.append(screenshot_path) # Appends full path
+            
+            # Process years in batches to reduce memory pressure
+            batch_size = 4
+            for i in range(0, len(years_to_screenshot), batch_size):
+                batch = years_to_screenshot[i:i+batch_size]
+                logger.info(f"Processing batch of years: {batch}")
+                
+                for year in batch:
+                    screenshot_path = select_year_and_screenshot(page, year, referencia_catastral)
+                    if screenshot_path:
+                        screenshot_paths.append(screenshot_path)
+                
+                # Close and reopen contexts between batches to free memory
+                if i + batch_size < len(years_to_screenshot):
+                    logger.info("Freeing memory between batches...")
+                    # Do a simple browser operation to flush memory
+                    page.evaluate("() => { try { window.gc && window.gc(); } catch(e) {} }")
             
             browser.close()
             
@@ -324,6 +363,7 @@ def process_and_zip_photos(referencia_catastral):
 # def serve_screenshot(filename):
 #     return send_file(os.path.join(SCREENSHOT_DIR, filename))
 
-# Keep commented out for deployment
-# if __name__ == '__main__':
-#    app.run(debug=True)
+# Uncomment and modify for deployment
+if __name__ == '__main__':
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
